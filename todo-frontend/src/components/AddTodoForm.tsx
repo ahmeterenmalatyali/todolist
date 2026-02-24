@@ -1,22 +1,31 @@
 "use client";
 
-import { FiPlus, FiCalendar, FiUser } from "react-icons/fi";
+import { FiPlus, FiCalendar, FiEdit3 } from "react-icons/fi";
 
 export const AddTodoForm = ({ 
   onSubmit, title, setTitle, priority, setPriority, 
-  category, setCategory, dueDate, setDueDate,
-  members, assignedUserId, setAssignedUserId 
+  category, setCategory, dueDate, setDueDate
 }: any) => {
   return (
     <form onSubmit={onSubmit} className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] shadow-xl shadow-indigo-500/5 mb-10 border border-slate-100 dark:border-slate-800">
       <div className="flex flex-col gap-4">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Yeni görev başlığı..."
-          className="w-full bg-transparent border-none text-xl font-bold placeholder:text-slate-300 focus:ring-0 dark:text-white"
-        />
+        {/* Görev Başlığı Input - Yeni Tasarım */}
+        <div className="relative flex items-center gap-3 bg-slate-50 dark:bg-slate-800/60 border-2 border-transparent focus-within:border-indigo-500 rounded-2xl px-4 py-3 transition-all duration-200 outline-none">
+          <FiEdit3 size={20} className="text-indigo-400 shrink-0" />
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Yeni görev ekle..."
+            className="w-full bg-transparent border-none text-base font-semibold placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-0 outline-none dark:text-white text-slate-700"
+            style={{ outline: "none", boxShadow: "none" }}
+          />
+          {title.length > 0 && (
+            <span className="text-[10px] font-black text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-lg shrink-0">
+              {title.length} harf
+            </span>
+          )}
+        </div>
         
         <div className="flex flex-wrap items-center gap-3">
           {/* Öncelik Seçimi */}
@@ -48,23 +57,6 @@ export const AddTodoForm = ({
               onChange={(e) => setDueDate(e.target.value)} 
               className="bg-transparent border-none text-[11px] font-black p-0 focus:ring-0" 
             />
-          </div>
-
-          {/* KULLANICI ATAMA (Üye Listesi) */}
-          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl text-slate-500">
-            <FiUser size={14} />
-            <select 
-              value={assignedUserId} 
-              onChange={(e) => setAssignedUserId(e.target.value)} 
-              className="bg-transparent border-none text-[11px] font-black p-0 focus:ring-0 cursor-pointer"
-            >
-              <option value="">Ata (Boş)</option>
-              {members?.map((m: any) => (
-                <option key={m.id} value={m.id}>
-                  {m.username}
-                </option>
-              ))}
-            </select>
           </div>
 
           {/* Gönder Butonu */}

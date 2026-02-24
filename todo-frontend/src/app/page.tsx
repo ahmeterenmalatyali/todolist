@@ -76,11 +76,16 @@ export default function HomePage() {
     if (!pId) return;
     try {
       const res = await api.get(`/Project/${pId}/members`);
-      setMembers(res.data);
+      const memberList = res.data;
+      // Yönetici (currentUser) listede yoksa ekle
+      if (currentUser && !memberList.find((m: any) => m.id === currentUser.id)) {
+        memberList.unshift(currentUser);
+      }
+      setMembers(memberList);
     } catch (e) {
       console.error("Üye listesi çekilemedi:", e);
     }
-  }, [activeProject]);
+  }, [activeProject, currentUser]);
 
   const loadInitialData = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -239,7 +244,7 @@ export default function HomePage() {
             username={activeProject?.name || "LİSTE SEÇİN"}
             stats={{ total: todos.length, completed: todos.filter(t => t.isCompleted).length, pending: todos.filter(t => !t.isCompleted).length }}
             darkMode={darkMode} setDarkMode={setDarkMode}
-            onLogout={() => {}}
+            onLogout={() => { localStorage.clear(); router.push("/login"); }}
           />
 
           {isLeader ? (
@@ -327,7 +332,7 @@ export default function HomePage() {
         <SubTaskModal
           todo={selectedTodo}
           onClose={() => setSelectedTodo(null)}
-          members={members}
+          members={members.filter((m: any) => m.id !== currentUser?.id)}
           onUpdateAssignees={handleUpdateAssignees}
           onToggleSub={async (sid: any) => {
             try {
