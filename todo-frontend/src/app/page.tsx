@@ -33,6 +33,8 @@ export default function HomePage() {
   const [isOrderChanged, setIsOrderChanged] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [categories, setCategories] = useState<any[]>([]);
+
   const [newTodoTitle, setNewTodoTitle] = useState("");
   const [priority, setPriority] = useState(1);
   const [category, setCategory] = useState("Genel");
@@ -70,6 +72,30 @@ export default function HomePage() {
       console.error("Görev hatası:", error);
     }
   }, [activeProject]); // selectedTodo dependency'si kaldırıldı
+
+  const fetchCategories = useCallback(async () => {
+    const pId = activeProject?.id || activeProject?.Id;
+    if (!pId) return;
+    try {
+      const res = await api.get(`/Category/${pId}`);
+      setCategories(res.data);
+      // Varsayılan kategoriyi ilk sıraya ayarla
+      if (res.data.length > 0) setCategory(res.data[0].name);
+    } catch (e) {
+      console.error("Kategoriler çekilemedi:", e);
+    }
+  }, [activeProject]);
+
+  const handleAddCategory = async (name: string) => {
+    const pId = activeProject?.id || activeProject?.Id;
+    try {
+      await api.post(`/Category/${pId}`, { name });
+      toast.success("Kategori eklendi!");
+      fetchCategories();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Kategori eklenemedi.");
+    }
+  };
 
   const fetchMembers = useCallback(async () => {
     const pId = activeProject?.id || activeProject?.Id;
@@ -114,8 +140,9 @@ export default function HomePage() {
     if (activeProject) {
       fetchTodos();
       fetchMembers();
+      fetchCategories();
     }
-  }, [activeProject, fetchTodos, fetchMembers]);
+  }, [activeProject, fetchTodos, fetchMembers, fetchCategories]);
 
   const handleAddTodoSubmit = async (e: any) => {
     e.preventDefault();
@@ -254,6 +281,8 @@ export default function HomePage() {
               priority={priority} setPriority={setPriority}
               category={category} setCategory={setCategory}
               dueDate={dueDate} setDueDate={setDueDate}
+              categories={categories}
+              onAddCategory={handleAddCategory}
             />
           ) : (
             <div className="p-6 bg-white dark:bg-slate-900 rounded-3xl text-center text-sm font-bold text-slate-400 mb-8 border border-dashed border-slate-200">

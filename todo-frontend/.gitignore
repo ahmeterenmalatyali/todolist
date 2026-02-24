@@ -17,7 +17,9 @@
 # Build çıktıları
 **/obj/
 **/bin/
-
+[Bb]in/
+[Obj]obj/
+*.user
 # testing
 /coverage
 
