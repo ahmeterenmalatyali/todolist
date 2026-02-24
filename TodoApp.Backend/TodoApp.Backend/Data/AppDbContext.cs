@@ -12,6 +12,7 @@ namespace TodoApp.Backend
         public DbSet<User> Users { get; set; } = null!;
         public DbSet<Todo> Todos { get; set; } = null!;
         public DbSet<SubTask> SubTasks { get; set; } = null!;
+        public DbSet<Category> Categories { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -46,6 +47,13 @@ namespace TodoApp.Backend
                 .HasForeignKey(s => s.AssignedUserId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // Category -> Project
+            modelBuilder.Entity<Category>()
+                .HasOne(c => c.Project)
+                .WithMany()
+                .HasForeignKey(c => c.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             base.OnModelCreating(modelBuilder);
         }
