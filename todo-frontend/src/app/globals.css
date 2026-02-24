@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/* 1. DEĞİŞKENLERİ TANIMLIYORUZ */
+@theme {
+  --color-background-light: #f8fafc;
+  --color-background-dark: #020617;
+  --color-card-light: #ffffff;
+  --color-card-dark: #0f172a;
+  --color-text-light: #1e293b;
+  --color-text-dark: #f1f5f9;
+}
+
+/* 2. AYDINLIK MOD (VARSAYILAN) */
+:root {
+  --background: var(--color-background-light);
+  --foreground: var(--color-text-light);
+  --card: var(--color-card-light);
+}
+
+/* 3. KARANLIK MOD (HTML'de 'dark' SINIFI VARSA ÇALIŞIR) */
+/* Tailwind v4'te manuel dark mode tetikleyicisi */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  --background: var(--color-background-dark);
+  --foreground: var(--color-text-dark);
+  --card: var(--color-card-dark);
+}
+select option {
+  background-color: white;
+  color: black;
+}
+.dark select option {
+  background-color: #0f172a; /* Slate 900 */
+  color: white;
+}
+
+/* 4. TEMEL STİLLER */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  transition: all 0.5s ease;
+  margin: 0;
+  padding: 0;
+}
