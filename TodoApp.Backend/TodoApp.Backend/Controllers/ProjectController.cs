@@ -261,6 +261,15 @@ namespace TodoApp.Backend.Controllers
                 .FirstOrDefaultAsync(pm => pm.ProjectId == projectId && pm.UserId == targetUserId);
             if (target == null) return NotFound(new { message = "Üye bulunamadı." });
 
+            // Göreve atanmış mı kontrol et
+            var assignedTodoTitles = await _context.Todos
+                .Where(t => t.ProjectId == projectId && t.Assignees.Any(u => u.Id == targetUserId))
+                .Select(t => t.Title)
+                .ToListAsync();
+
+            if (assignedTodoTitles.Any())
+                return BadRequest(new { message = $"Bu üye {assignedTodoTitles.Count} göreve atanmış. Önce görevlerden çıkarın.", tasks = assignedTodoTitles });
+
             _context.ProjectMembers.Remove(target);
             await _context.SaveChangesAsync();
             return Ok(new { message = "Üye projeden çıkarıldı." });
