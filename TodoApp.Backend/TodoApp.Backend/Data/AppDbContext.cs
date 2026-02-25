@@ -40,13 +40,19 @@ namespace TodoApp.Backend
                 .WithMany(t => t.SubTasks)
                 .HasForeignKey(st => st.TodoId);
 
-            // SubTask -> AssignedUser (tekil, opsiyonel FK)
+            // SubTask -> AssignedUser (tekil, opsiyonel FK — geriye dönük uyumluluk)
             modelBuilder.Entity<SubTask>()
                 .HasOne(s => s.AssignedUser)
                 .WithMany()
                 .HasForeignKey(s => s.AssignedUserId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // SubTask -> Assignees (çoklu, many-to-many)
+            modelBuilder.Entity<SubTask>()
+                .HasMany(s => s.Assignees)
+                .WithMany(u => u.AssignedSubTasks)
+                .UsingEntity(j => j.ToTable("SubTaskAssignees"));
 
             // Category -> Project
             modelBuilder.Entity<Category>()

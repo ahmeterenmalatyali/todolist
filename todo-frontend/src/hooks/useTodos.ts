@@ -146,6 +146,15 @@ export function useTodos(activeProject: any) {
     }
   };
 
+  const handleUpdateSubTaskAssignees = async (subTaskId: number, userId: number) => {
+    try {
+      await api.post(`/Todo/subtask/${subTaskId}/assign/${userId}`);
+      fetchTodos();
+    } catch {
+      toast.error("Alt görev ataması güncellenemedi.");
+    }
+  };
+
   const handleAddSubTask = async (e: any, uId: string) => {
     e.preventDefault();
     if (!newSubTaskTitle.trim()) return;
@@ -224,6 +233,7 @@ export function useTodos(activeProject: any) {
     handleSaveOrder,
     handleToggleSubTask,
     handleAddSubTask,
+    handleUpdateSubTaskAssignees,
     removeMemberFromTodos,
   };
 }

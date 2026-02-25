@@ -1,7 +1,5 @@
 namespace TodoApp.Backend.Entities
 {
-    // HATA DÜZELTMESİ: Bu dosya /models klasöründen /Entities klasörüne taşınmalıdır.
-    // Dosyanın yeni konumu: backend/Entities/SubTask.cs
     public class SubTask
     {
         public int Id { get; set; }
@@ -9,7 +7,11 @@ namespace TodoApp.Backend.Entities
         public bool IsCompleted { get; set; }
         public int TodoId { get; set; }
 
+        // Eski tekil atama — geriye dönük uyumluluk için tutuldu
         public int? AssignedUserId { get; set; }
         public User? AssignedUser { get; set; }
+
+        // YENİ: Çoklu atama (many-to-many)
+        public ICollection<User> Assignees { get; set; } = new List<User>();
     }
 }
