@@ -3,6 +3,13 @@
 import { Draggable } from "@hello-pangea/dnd";
 import { FiTrash2, FiCalendar, FiCheckCircle, FiCircle, FiAlertCircle } from "react-icons/fi";
 
+// YENİ: öncelik gösterimi için renk haritası
+const PRIORITY_CONFIG: Record<number, { label: string; bg: string; text: string; dot: string }> = {
+  1: { label: "Düşük", bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", dot: "bg-emerald-500" },
+  2: { label: "Orta",  bg: "bg-amber-100 dark:bg-amber-900/30",   text: "text-amber-600 dark:text-amber-400",   dot: "bg-amber-500"  },
+  3: { label: "Acil",  bg: "bg-rose-100 dark:bg-rose-900/30",     text: "text-rose-600 dark:text-rose-400",     dot: "bg-rose-500"   },
+};
+
 export const TodoItem = ({ todo, index, role, onToggle, onDelete, onSelect, sortBy }: any) => {
   const isLeader = role === "Leader";
 
@@ -14,14 +21,20 @@ export const TodoItem = ({ todo, index, role, onToggle, onDelete, onSelect, sort
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     const formatted = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short' }).format(dueDate);
 
-    if (diffDays < 0) return { label: `Gecikti: ${formatted}`, color: "text-rose-600 bg-rose-50 border-rose-200", icon: <FiAlertCircle /> };
-    if (diffDays === 0) return { label: "Bugün", color: "text-amber-600 bg-amber-50 border-amber-200", icon: <FiCalendar /> };
-    if (diffDays === 1) return { label: "Yarın", color: "text-blue-600 bg-blue-50 border-blue-200", icon: <FiCalendar /> };
-    return { label: formatted, color: "text-indigo-600 bg-indigo-50 border-indigo-200", icon: <FiCalendar /> };
+    if (diffDays < 0) return { label: `Gecikti: ${formatted}`, color: "text-rose-600 bg-rose-50 border-rose-200", icon: <FiAlertCircle />, blink: false };
+    if (diffDays === 0) return { label: "Bugün", color: "text-amber-600 bg-amber-50 border-amber-200", icon: <FiCalendar />, blink: true };  // YENİ: blink=true
+    if (diffDays === 1) return { label: "Yarın", color: "text-blue-600 bg-blue-50 border-blue-200", icon: <FiCalendar />, blink: false };
+    return { label: formatted, color: "text-indigo-600 bg-indigo-50 border-indigo-200", icon: <FiCalendar />, blink: false };
   };
 
   const status = getDateStatus(todo.dueDate);
-  const priorityColors: any = { 1: "bg-emerald-500", 2: "bg-amber-500", 3: "bg-rose-500" };
+  const pConfig = PRIORITY_CONFIG[todo.priority];
+
+  // YENİ: avatar src helper
+  const getAvatarSrc = (assignee: any) => {
+    if (assignee.avatarUrl) return assignee.avatarUrl;
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${assignee.username}`;
+  };
 
   return (
     <Draggable draggableId={todo.id.toString()} index={index} isDragDisabled={sortBy !== "Manuel" || !isLeader}>
@@ -37,24 +50,25 @@ export const TodoItem = ({ todo, index, role, onToggle, onDelete, onSelect, sort
                 {todo.title}
               </span>
               
-              <div className="flex items-center gap-2 mt-1.5">
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{todo.category || "Genel"}</span>
 
                 {status && !todo.isCompleted && (
-                  <span className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${status.color}`}>
+                  // YENİ: blink true ise today-blink class'ı eklenir
+                  <span className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${status.color} ${status.blink ? "today-blink" : ""}`}>
                     {status.icon} {status.label}
                   </span>
                 )}
 
-                {/* ÇOKLU ATANAN KULLANICILAR (AVATARLAR) */}
+                {/* YENİ: Avatarlı atanan kullanıcılar */}
                 <div className="flex -space-x-2 ml-1">
                   {todo.assignees?.map((assignee: any) => (
-                    <div 
-                      key={assignee.id} 
+                    <div
+                      key={assignee.id}
                       title={assignee.username}
-                      className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[8px] font-black text-slate-500 uppercase"
+                      className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-900 overflow-hidden"
                     >
-                      {assignee.username.substring(0, 2)}
+                      <img src={getAvatarSrc(assignee)} alt={assignee.username} className="w-full h-full object-cover" />
                     </div>
                   ))}
                 </div>
@@ -63,7 +77,19 @@ export const TodoItem = ({ todo, index, role, onToggle, onDelete, onSelect, sort
           </div>
 
           <div className="flex items-center gap-3">
-            <div className={`w-2 h-2 rounded-full ${priorityColors[todo.priority] || "bg-slate-300"}`} />
+            {/* YENİ: Öncelik — sadece nokta yerine etiketli pill (masaüstünde) */}
+            {pConfig ? (
+              <>
+                <span className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase ${pConfig.bg} ${pConfig.text}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${pConfig.dot}`} />
+                  {pConfig.label}
+                </span>
+                <span className={`sm:hidden w-3 h-3 rounded-full ${pConfig.dot}`} />
+              </>
+            ) : (
+              <div className="w-2 h-2 rounded-full bg-slate-300" />
+            )}
+
             {isLeader && (
               <button onClick={(e) => { e.stopPropagation(); onDelete(todo.id); }} className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all">
                 <FiTrash2 size={18} />

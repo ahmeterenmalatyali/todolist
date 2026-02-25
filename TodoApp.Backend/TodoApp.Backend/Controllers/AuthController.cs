@@ -88,12 +88,32 @@ namespace TodoApp.Backend.Controllers
             var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
 
+            // YENİ: AvatarUrl de dahil edildi
             var user = await _context.Users
-                .Select(u => new { u.Id, u.Username, u.Email, u.IsEmailConfirmed })
+                .Select(u => new { u.Id, u.Username, u.Email, u.IsEmailConfirmed, u.AvatarUrl })
                 .FirstOrDefaultAsync(u => u.Id == int.Parse(userIdStr));
 
             if (user == null) return NotFound();
             return Ok(user);
+        }
+
+        // YENİ: Avatar güncelleme endpoint'i
+        [Authorize]
+        [HttpPut("avatar")]
+        public async Task<IActionResult> UpdateAvatar([FromBody] AvatarUpdateDto dto)
+        {
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return NotFound();
+
+            // Max 5MB kontrolü (base64 string olarak)
+            if (!string.IsNullOrEmpty(dto.AvatarData) && dto.AvatarData.Length > 5_000_000)
+                return BadRequest(new { message = "Avatar dosyası çok büyük (max ~3.5MB)." });
+
+            user.AvatarUrl = dto.AvatarData; // null gönderilirse DiceBear'a döner
+            await _context.SaveChangesAsync();
+
+            return Ok(new { avatarUrl = user.AvatarUrl, message = "Avatar güncellendi." });
         }
 
         private string GenerateJwtToken(User user)
@@ -130,5 +150,11 @@ namespace TodoApp.Backend.Controllers
     {
         public string UsernameOrEmail { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+    }
+
+    // YENİ
+    public class AvatarUpdateDto
+    {
+        public string? AvatarData { get; set; }
     }
 }

@@ -12,6 +12,9 @@ namespace TodoApp.Backend.Entities
         public bool IsEmailConfirmed { get; set; }
         public string? EmailConfirmationToken { get; set; }
 
+        // YENİ: Avatar URL (null ise frontend DiceBear kullanır)
+        public string? AvatarUrl { get; set; }
+
         // Çoklu atama ilişkisi
         public ICollection<Todo> AssignedTodos { get; set; } = new List<Todo>();
     }

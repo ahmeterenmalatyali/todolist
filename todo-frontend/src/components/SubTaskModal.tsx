@@ -1,13 +1,18 @@
 "use client";
 
 import { useState } from "react";
-// HATA DÜZELTMESİ: FiCheckCircle ve FiCircle artık doğru şekilde react-icons'dan import ediliyor
 import { FiX, FiPlus, FiUser, FiCheck, FiUsers, FiCheckCircle, FiCircle } from "react-icons/fi";
 
 export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, setNewTitle, isLeader, members, onUpdateAssignees }: any) => {
   const [subTaskUserId, setSubTaskUserId] = useState("");
 
   const currentAssigneeIds = todo.assignees?.map((a: any) => a.id) || [];
+
+  // YENİ: avatar src helper
+  const getAvatarSrc = (member: any) => {
+    if (member.avatarUrl) return member.avatarUrl;
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.username}`;
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -44,8 +49,9 @@ export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, s
                         : "bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-100 dark:border-slate-700 hover:border-indigo-300"
                     }`}
                   >
-                    <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
-                      {member.username.substring(0, 2).toUpperCase()}
+                    {/* YENİ: initials yerine avatar */}
+                    <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
+                      <img src={getAvatarSrc(member)} alt={member.username} className="w-full h-full object-cover" />
                     </div>
                     {member.username}
                     {isAssigned && <FiCheck size={14} />}
@@ -105,7 +111,6 @@ export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, s
                       onClick={() => onToggleSub(sub.id)}
                       className={`text-xl transition-colors ${sub.isCompleted ? "text-indigo-500" : "text-slate-300 hover:text-indigo-400"}`}
                     >
-                      {/* HATA DÜZELTMESİ: Artık gerçek react-icons bileşenleri kullanılıyor */}
                       {sub.isCompleted ? <FiCheckCircle /> : <FiCircle />}
                     </button>
                     <span className={`text-sm font-semibold ${sub.isCompleted ? "line-through text-slate-300" : "text-slate-600 dark:text-slate-300"}`}>
@@ -115,7 +120,14 @@ export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, s
 
                   {sub.assignedUser && (
                     <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-100 dark:border-slate-700">
-                      <FiUser size={12} className="text-indigo-500" />
+                      {/* YENİ: FiUser ikonu yerine avatar */}
+                      <div className="w-5 h-5 rounded-full overflow-hidden">
+                        <img
+                          src={sub.assignedUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${sub.assignedUser.username}`}
+                          alt={sub.assignedUser.username}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                       <span className="text-[10px] font-black text-slate-500 uppercase">{sub.assignedUser.username}</span>
                     </div>
                   )}
