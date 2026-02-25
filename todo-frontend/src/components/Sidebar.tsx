@@ -127,10 +127,13 @@ export default function Sidebar({
     }
   };
 
-  const handleUnarchive = async (projectId: number, projectName: string) => {
+  const handleUnarchive = async (project: any) => {
     try {
-      await api.patch(`/Project/${projectId}/unarchive`);
-      toast.success(`"${projectName}" arşivden çıkarıldı.`);
+      await api.patch(`/Project/${project.id}/unarchive`);
+      toast.success(`"${project.name}" arşivden çıkarıldı.`);
+      // Aktif projeyi hemen güncelle — sayfa yenilemesine gerek kalmaz
+      const updatedProject = { ...project, isArchived: false };
+      setActiveProject(updatedProject);
       if (onProjectsRefresh) onProjectsRefresh();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "İşlem başarısız.");
@@ -316,15 +319,22 @@ export default function Sidebar({
                     const isOwner = projects.owned?.some((o: any) => o.id === p.id);
                     return (
                       <div key={p.id} className="group relative">
-                        <div className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-slate-600 bg-slate-900/50 border border-slate-800/50">
+                        <button
+                          onClick={() => setActiveProject(p)}
+                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
+                            activeProject?.id === p.id
+                              ? "bg-amber-600/10 text-amber-400 border border-amber-800/40"
+                              : "text-slate-600 hover:bg-slate-900/80 hover:text-slate-400 border border-transparent"
+                          }`}
+                        >
                           <FiLock size={13} className="text-amber-700 flex-shrink-0" />
                           <span className="truncate pr-10 line-through decoration-slate-700">{p.name}</span>
-                        </div>
+                        </button>
                         {/* Sadece sahip arşivden çıkarabilir */}
                         {isOwner && (
                           <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
-                              onClick={() => handleUnarchive(p.id, p.name)}
+                              onClick={(e) => { e.stopPropagation(); handleUnarchive(p); }}
                               className="p-1.5 text-slate-500 hover:text-emerald-400 bg-slate-800 hover:bg-emerald-900/30 rounded-lg transition-all"
                               title="Arşivden Çıkar"
                             >
