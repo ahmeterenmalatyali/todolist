@@ -11,11 +11,12 @@ namespace TodoApp.Backend.Entities
         public List<ProjectMember> ProjectMemberships { get; set; } = new();
         public bool IsEmailConfirmed { get; set; }
         public string? EmailConfirmationToken { get; set; }
-
-        // YENİ: Avatar URL (null ise frontend DiceBear kullanır)
         public string? AvatarUrl { get; set; }
 
-        // Çoklu atama ilişkisi
+        // Todo çoklu atama
         public ICollection<Todo> AssignedTodos { get; set; } = new List<Todo>();
+
+        // SubTask çoklu atama
+        public ICollection<SubTask> AssignedSubTasks { get; set; } = new List<SubTask>();
     }
 }

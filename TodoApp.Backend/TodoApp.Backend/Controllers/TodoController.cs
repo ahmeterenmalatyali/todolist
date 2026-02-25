@@ -38,6 +38,8 @@ namespace TodoApp.Backend.Controllers
                 .Where(t => t.ProjectId == projectId)
                 .Include(t => t.SubTasks)
                     .ThenInclude(s => s.AssignedUser)
+                .Include(t => t.SubTasks)
+                    .ThenInclude(s => s.Assignees)
                 .Include(t => t.AssignedUser)
                 .Include(t => t.Assignees)
                 .OrderBy(t => t.Order)
@@ -68,7 +70,13 @@ namespace TodoApp.Backend.Controllers
                     s.AssignedUserId,
                     AssignedUser = s.AssignedUser != null
                         ? (object)new { s.AssignedUser.Id, s.AssignedUser.Username, s.AssignedUser.AvatarUrl }
-                        : null
+                        : null,
+                    Assignees = s.Assignees.Select(a => new
+                    {
+                        a.Id,
+                        a.Username,
+                        a.AvatarUrl
+                    }).ToList()
                 }).ToList()
             }).ToList();
 
@@ -182,6 +190,24 @@ namespace TodoApp.Backend.Controllers
             _context.SubTasks.Add(subTask);
             await _context.SaveChangesAsync();
             return Ok(subTask);
+        }
+
+        [HttpPost("subtask/{subTaskId}/assign/{userId}")]
+        public async Task<IActionResult> AssignSubTaskUser(int subTaskId, int userId)
+        {
+            var subTask = await _context.SubTasks
+                .Include(s => s.Assignees)
+                .FirstOrDefaultAsync(s => s.Id == subTaskId);
+            var user = await _context.Users.FindAsync(userId);
+            if (subTask == null || user == null) return NotFound();
+
+            if (subTask.Assignees.Any(u => u.Id == userId))
+                subTask.Assignees.Remove(user);
+            else
+                subTask.Assignees.Add(user);
+
+            await _context.SaveChangesAsync();
+            return Ok();
         }
 
         [HttpPut("subtask/{subTaskId}/toggle")]

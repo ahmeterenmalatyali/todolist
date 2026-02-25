@@ -59,6 +59,7 @@ export default function HomePage() {
     handleDeleteTodo, handleToggleTodo,
     handleUpdateAssignees, handleOnDragEnd, handleSaveOrder,
     handleToggleSubTask, handleAddSubTask,
+    handleUpdateSubTaskAssignees,
     removeMemberFromTodos,
   } = useTodos(activeProject);
 
@@ -278,6 +279,7 @@ export default function HomePage() {
           onUpdateAssignees={handleUpdateAssignees}
           onToggleSub={handleToggleSubTask}
           onAddSub={handleAddSubTask}
+          onUpdateSubAssignees={handleUpdateSubTaskAssignees}
           newTitle={newSubTaskTitle}
           setNewTitle={setNewSubTaskTitle}
         />
