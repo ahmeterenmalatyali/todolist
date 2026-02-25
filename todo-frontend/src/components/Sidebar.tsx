@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import {
   FiHash, FiPlus, FiFolder, FiUsers, FiLogOut, FiUserPlus,
-  FiBell, FiCheck, FiX, FiChevronDown, FiChevronUp, FiTrash2, FiAlertTriangle
+  FiBell, FiCheck, FiX, FiChevronDown, FiChevronUp, FiTrash2,
+  FiAlertTriangle, FiArchive, FiRefreshCw, FiLock
 } from "react-icons/fi";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
@@ -19,7 +20,7 @@ interface SidebarProps {
   onNewProject: () => void;
   onInviteOpen: (project: any) => void;
   onLogout: () => void;
-  onDeleteProject?: (projectId: number) => void; // YENİ
+  onDeleteProject?: (projectId: number) => void;
 }
 
 export default function Sidebar({
@@ -37,10 +38,23 @@ export default function Sidebar({
 }: SidebarProps) {
   const [invitations, setInvitations] = useState<any[]>([]);
   const [showInvites, setShowInvites] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
-  // YENİ: Liste silme onay popup state'i
   const [projectToDelete, setProjectToDelete] = useState<{ id: number; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [projectToArchive, setProjectToArchive] = useState<{ id: number; name: string } | null>(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+
+  // Aktif projeler (arşivlenmemiş)
+  const activeOwned = projects.owned?.filter((p) => !p.isArchived) ?? [];
+  const activeJoined = projects.joined?.filter((p) => !p.isArchived) ?? [];
+
+  // Arşivlenmiş projeler (sadece sahibi olanlar)
+  const archivedOwned = projects.owned?.filter((p) => p.isArchived) ?? [];
+  // Üye olduğum arşivlenmiş projeler (sadece görüntüleme için)
+  const archivedJoined = projects.joined?.filter((p) => p.isArchived) ?? [];
+  const allArchived = [...archivedOwned, ...archivedJoined];
 
   const fetchInvitations = async () => {
     try {
@@ -61,7 +75,7 @@ export default function Sidebar({
     try {
       await api.post(`/Project/${projectId}/invitations/accept`);
       toast.success(`"${projectName}" projesine katıldınız!`);
-      setInvitations(prev => prev.filter(i => i.projectId !== projectId));
+      setInvitations((prev) => prev.filter((i) => i.projectId !== projectId));
       if (onProjectsRefresh) onProjectsRefresh();
     } catch {
       toast.error("Davet kabul edilemedi.");
@@ -72,13 +86,12 @@ export default function Sidebar({
     try {
       await api.post(`/Project/${projectId}/invitations/reject`);
       toast.success("Davet reddedildi.");
-      setInvitations(prev => prev.filter(i => i.projectId !== projectId));
+      setInvitations((prev) => prev.filter((i) => i.projectId !== projectId));
     } catch {
       toast.error("İşlem yapılamadı.");
     }
   };
 
-  // YENİ: Liste silme onayı
   const handleConfirmDelete = async () => {
     if (!projectToDelete) return;
     setIsDeleting(true);
@@ -92,6 +105,35 @@ export default function Sidebar({
       toast.error(err.response?.data?.message || "Liste silinemedi.");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleConfirmArchive = async () => {
+    if (!projectToArchive) return;
+    setIsArchiving(true);
+    try {
+      await api.patch(`/Project/${projectToArchive.id}/archive`);
+      toast.success(`"${projectToArchive.name}" arşivlendi.`);
+      setProjectToArchive(null);
+      // Aktif proje arşivlendiyse seçimi kaldır
+      if (activeProject?.id === projectToArchive.id) {
+        setActiveProject(null);
+      }
+      if (onProjectsRefresh) onProjectsRefresh();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Arşivlenemedi.");
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
+  const handleUnarchive = async (projectId: number, projectName: string) => {
+    try {
+      await api.patch(`/Project/${projectId}/unarchive`);
+      toast.success(`"${projectName}" arşivden çıkarıldı.`);
+      if (onProjectsRefresh) onProjectsRefresh();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "İşlem başarısız.");
     }
   };
 
@@ -174,42 +216,53 @@ export default function Sidebar({
 
         {/* ORTA: Liste navigasyonu */}
         <nav className="flex-1 overflow-y-auto px-4 space-y-6 custom-scrollbar min-h-0">
-          {/* KENDİ LİSTELERİM */}
+
+          {/* KENDİ LİSTELERİM (aktif) */}
           <div>
             <div className="flex items-center justify-between px-3 mb-4 text-[10px] font-black uppercase tracking-widest text-slate-500">
               <span>Kendi Listelerim</span>
               <FiFolder size={12} />
             </div>
             <div className="space-y-1">
-              {projects.owned?.map((p) => (
+              {activeOwned.length === 0 && (
+                <p className="px-3 text-[11px] text-slate-600 italic">Liste yok</p>
+              )}
+              {activeOwned.map((p) => (
                 <div key={p.id} className="group relative">
                   <button
                     onClick={() => setActiveProject(p)}
                     className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
-                      activeProject?.id === p.id ? "bg-indigo-600/10 text-indigo-400" : "hover:bg-slate-900 hover:text-slate-200"
+                      activeProject?.id === p.id
+                        ? "bg-indigo-600/10 text-indigo-400"
+                        : "hover:bg-slate-900 hover:text-slate-200"
                     }`}
                   >
                     <FiHash className={activeProject?.id === p.id ? "text-indigo-400" : "text-slate-600"} />
-                    <span className="truncate pr-16">{p.name}</span>
+                    <span className="truncate pr-20">{p.name}</span>
                   </button>
 
-                  {/* Hover'da sağda iki buton: davet + sil */}
+                  {/* Hover'da sağda 3 buton: davet + arşivle + sil */}
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {/* Davet et */}
                     <button
                       onClick={(e) => { e.stopPropagation(); onInviteOpen(p); }}
                       className="p-1.5 text-slate-500 hover:text-white bg-slate-800 rounded-lg transition-all"
                       title="Kullanıcı Davet Et"
                     >
-                      <FiUserPlus size={13} />
+                      <FiUserPlus size={12} />
                     </button>
-                    {/* YENİ: Listeyi sil */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setProjectToArchive({ id: p.id, name: p.name }); }}
+                      className="p-1.5 text-slate-500 hover:text-amber-400 bg-slate-800 hover:bg-amber-900/30 rounded-lg transition-all"
+                      title="Arşivle"
+                    >
+                      <FiArchive size={12} />
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setProjectToDelete({ id: p.id, name: p.name }); }}
                       className="p-1.5 text-slate-500 hover:text-rose-400 bg-slate-800 hover:bg-rose-900/30 rounded-lg transition-all"
                       title="Listeyi Sil"
                     >
-                      <FiTrash2 size={13} />
+                      <FiTrash2 size={12} />
                     </button>
                   </div>
                 </div>
@@ -217,20 +270,22 @@ export default function Sidebar({
             </div>
           </div>
 
-          {/* KATILDIĞIM LİSTELER */}
-          {projects.joined?.length > 0 && (
+          {/* KATILDIĞIM LİSTELER (aktif) */}
+          {activeJoined.length > 0 && (
             <div>
               <div className="flex items-center justify-between px-3 mb-4 text-[10px] font-black uppercase tracking-widest text-slate-500">
                 <span>Katıldığım Listeler</span>
                 <FiUsers size={12} />
               </div>
               <div className="space-y-1">
-                {projects.joined.map((p) => (
+                {activeJoined.map((p) => (
                   <button
                     key={p.id}
                     onClick={() => setActiveProject(p)}
                     className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all ${
-                      activeProject?.id === p.id ? "bg-emerald-600/10 text-emerald-400" : "hover:bg-slate-900 hover:text-slate-200"
+                      activeProject?.id === p.id
+                        ? "bg-emerald-600/10 text-emerald-400"
+                        : "hover:bg-slate-900 hover:text-slate-200"
                     }`}
                   >
                     <FiHash className={activeProject?.id === p.id ? "text-emerald-400" : "text-slate-600"} />
@@ -238,6 +293,50 @@ export default function Sidebar({
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ARŞİV BÖLÜMÜ */}
+          {allArchived.length > 0 && (
+            <div>
+              <button
+                onClick={() => setShowArchived(!showArchived)}
+                className="w-full flex items-center justify-between px-3 mb-2 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-slate-400 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <FiArchive size={12} />
+                  <span>Arşiv ({allArchived.length})</span>
+                </div>
+                {showArchived ? <FiChevronUp size={11} /> : <FiChevronDown size={11} />}
+              </button>
+
+              {showArchived && (
+                <div className="space-y-1">
+                  {allArchived.map((p) => {
+                    const isOwner = projects.owned?.some((o: any) => o.id === p.id);
+                    return (
+                      <div key={p.id} className="group relative">
+                        <div className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-slate-600 bg-slate-900/50 border border-slate-800/50">
+                          <FiLock size={13} className="text-amber-700 flex-shrink-0" />
+                          <span className="truncate pr-10 line-through decoration-slate-700">{p.name}</span>
+                        </div>
+                        {/* Sadece sahip arşivden çıkarabilir */}
+                        {isOwner && (
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleUnarchive(p.id, p.name)}
+                              className="p-1.5 text-slate-500 hover:text-emerald-400 bg-slate-800 hover:bg-emerald-900/30 rounded-lg transition-all"
+                              title="Arşivden Çıkar"
+                            >
+                              <FiRefreshCw size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -255,7 +354,59 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* YENİ: Liste silme onay popup'ı */}
+      {/* ARŞİVLE onay popup */}
+      {projectToArchive && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center text-amber-500">
+                  <FiArchive size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800 dark:text-white">Listeyi Arşivle</h3>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">Üyeler erişemez, arşivden geri alınabilir</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setProjectToArchive(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                <span className="font-black text-slate-800 dark:text-white">{projectToArchive.name}</span>{" "}
+                listesini arşivlemek istediğinize emin misiniz?
+              </p>
+              <p className="text-xs text-slate-400 mt-2">
+                Arşivlendikten sonra tüm üyeler listeye erişemez. İstediğiniz zaman arşivden geri alabilirsiniz.
+              </p>
+            </div>
+
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={() => setProjectToArchive(null)}
+                disabled={isArchiving}
+                className="flex-1 py-3 rounded-2xl text-sm font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleConfirmArchive}
+                disabled={isArchiving}
+                className="flex-1 py-3 rounded-2xl text-sm font-black bg-amber-500 hover:bg-amber-600 text-white transition-all disabled:opacity-60"
+              >
+                {isArchiving ? "Arşivleniyor..." : "Arşivle"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SİL onay popup */}
       {projectToDelete && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
@@ -279,9 +430,7 @@ export default function Sidebar({
 
             <div className="p-6">
               <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                <span className="font-black text-slate-800 dark:text-white">
-                  {projectToDelete.name}
-                </span>{" "}
+                <span className="font-black text-slate-800 dark:text-white">{projectToDelete.name}</span>{" "}
                 listesini silmek istediğinize emin misiniz?
               </p>
               <p className="text-xs text-slate-400 mt-2">

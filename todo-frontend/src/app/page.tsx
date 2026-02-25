@@ -55,6 +55,7 @@ export default function HomePage() {
   const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   const isLeader = activeProject?.isOwner || activeProject?.role === "Leader";
+  const isArchived = activeProject?.isArchived === true;
 
   const selectedTodoRef = useRef<any>(null);
   selectedTodoRef.current = selectedTodo;
@@ -381,11 +382,21 @@ export default function HomePage() {
                 onLogout={() => { localStorage.clear(); router.push("/login"); }}
                 members={members}
                 currentUserId={currentUser?.id}
-                isLeader={isLeader}
+                isLeader={isLeader && !isArchived}
                 onRemoveMember={handleRemoveMemberClick}
               />
 
-              {isLeader ? (
+              {/* ARŞİV DUVARI: Arşivlenmiş projelerde hiçbir şey düzenlenemez */}
+              {isArchived ? (
+                <div className="p-6 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-3xl text-center mb-8">
+                  <div className="text-3xl mb-3">🗄️</div>
+                  <h3 className="text-base font-black text-amber-700 dark:text-amber-400 mb-1">Bu liste arşivlendi</h3>
+                  <p className="text-xs text-amber-600/70 dark:text-amber-500/70">
+                    Arşivlenmiş listeler salt okunur modundadır. Düzenleme yapılamaz.
+                    {isLeader && " Arşivden çıkarmak için sol menüdeki arşiv bölümünü kullanın."}
+                  </p>
+                </div>
+              ) : isLeader ? (
                 <AddTodoForm
                   onSubmit={handleAddTodoSubmit}
                   title={newTodoTitle} setTitle={setNewTodoTitle}
@@ -412,14 +423,15 @@ export default function HomePage() {
                 setFilterAssignees={setFilterAssignees}
               />
 
-              <DragDropContext onDragEnd={handleOnDragEnd}>
+              {/* Arşivde TodoItem'lar gösterilir ama tıklanamaz (role=Archived) */}
+              <DragDropContext onDragEnd={isArchived ? () => {} : handleOnDragEnd}>
                 <StrictModeDroppable droppableId="todos">
                   {(provided) => (
                     <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-3 pb-24">
                       {filteredTodos.map((todo, index) => (
                         <TodoItem
                           key={todo.id} todo={todo} index={index} sortBy={sortBy}
-                          role={isLeader ? "Leader" : "Member"} currentUserId={currentUser?.id}
+                          role={isArchived ? "Archived" : isLeader ? "Leader" : "Member"} currentUserId={currentUser?.id}
                           onToggle={async (id: any) => {
                             try {
                               await api.put(`/Todo/${id}/toggle`);
