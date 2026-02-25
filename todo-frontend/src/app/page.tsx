@@ -16,6 +16,7 @@ import { SubTaskModal } from "@/components/SubTaskModal";
 import { StrictModeDroppable } from "@/components/StrictModeDroppable";
 import { InviteMemberModal } from "@/components/InviteMemberModal";
 import { NewProjectModal } from "@/components/NewProjectModal";
+import { AvatarModal } from "@/components/AvatarModal"; // YENİ
 
 export default function HomePage() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function HomePage() {
   const [darkMode, setDarkMode] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false); // YENİ
   const [selectedTodo, setSelectedTodo] = useState<any>(null);
   const [isOrderChanged, setIsOrderChanged] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -45,12 +47,12 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("Hepsi");
   const [filterPriority, setFilterPriority] = useState("Hepsi");
+  const [filterAssignees, setFilterAssignees] = useState<number[]>([]); // YENİ
   const [sortBy, setSortBy] = useState("Manuel");
 
   const isLeader = activeProject?.isOwner || activeProject?.role === "Leader";
 
   // HATA DÜZELTMESİ: selectedTodo dependency'si kaldırıldı — sonsuz döngü önlendi.
-  // selectedTodo güncellemesi ayrı bir ref aracılığıyla yapılıyor.
   const selectedTodoRef = useRef<any>(null);
   selectedTodoRef.current = selectedTodo;
 
@@ -63,7 +65,6 @@ export default function HomePage() {
       setTodos(sorted);
       setIsOrderChanged(false);
 
-      // Modal açıksa seçili görevi güncelle (ref kullanarak döngü önlendi)
       if (selectedTodoRef.current) {
         const updatedSelected = sorted.find((t: any) => t.id === selectedTodoRef.current.id);
         if (updatedSelected) setSelectedTodo(updatedSelected);
@@ -71,7 +72,7 @@ export default function HomePage() {
     } catch (error) {
       console.error("Görev hatası:", error);
     }
-  }, [activeProject]); // selectedTodo dependency'si kaldırıldı
+  }, [activeProject]);
 
   const fetchCategories = useCallback(async () => {
     const pId = activeProject?.id || activeProject?.Id;
@@ -79,7 +80,6 @@ export default function HomePage() {
     try {
       const res = await api.get(`/Category/${pId}`);
       setCategories(res.data);
-      // Varsayılan kategoriyi ilk sıraya ayarla
       if (res.data.length > 0) setCategory(res.data[0].name);
     } catch (e) {
       console.error("Kategoriler çekilemedi:", e);
@@ -113,6 +113,17 @@ export default function HomePage() {
     }
   }, [activeProject, currentUser]);
 
+  // YENİ: proje listesini yenile
+  const fetchProjects = useCallback(async () => {
+    try {
+      const res = await api.get("/Project");
+      setProjects(res.data);
+      return res.data;
+    } catch (e) {
+      console.error("Projeler çekilemedi:", e);
+    }
+  }, []);
+
   const loadInitialData = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) return router.push("/login");
@@ -141,6 +152,8 @@ export default function HomePage() {
       fetchTodos();
       fetchMembers();
       fetchCategories();
+      // YENİ: Proje değişince kişi filtrelerini sıfırla
+      setFilterAssignees([]);
     }
   }, [activeProject, fetchTodos, fetchMembers, fetchCategories]);
 
@@ -197,6 +210,19 @@ export default function HomePage() {
     }
   };
 
+  // YENİ: Üye çıkar
+  const handleRemoveMember = async (userId: number) => {
+    const pId = activeProject?.id || activeProject?.Id;
+    if (!confirm("Bu üyeyi projeden çıkarmak istediğinize emin misiniz?")) return;
+    try {
+      await api.delete(`/Project/${pId}/members/${userId}`);
+      toast.success("Üye projeden çıkarıldı.");
+      fetchMembers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "İşlem başarısız.");
+    }
+  };
+
   const handleOnDragEnd = (result: any) => {
     if (!isLeader || !result.destination) return;
     const items = Array.from(todos);
@@ -206,7 +232,6 @@ export default function HomePage() {
     setIsOrderChanged(true);
   };
 
-  // HATA DÜZELTMESİ: onDelete için hata yönetimi eklendi
   const handleDeleteTodo = async (id: number) => {
     try {
       await api.delete(`/Todo/${id}`);
@@ -217,12 +242,35 @@ export default function HomePage() {
     }
   };
 
-  const filteredTodos = todos.filter(t => {
-    const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = filterCategory === "Hepsi" || t.category === filterCategory;
-    const matchesPriority = filterPriority === "Hepsi" || t.priority.toString() === filterPriority;
-    return matchesSearch && matchesCategory && matchesPriority;
-  });
+  // YENİ: Filtreleme — kişi filtresi AND mantığıyla çalışır
+  // Seçilen tüm kişiler aynı anda o todo'da assignee olmalı
+  const filteredTodos = (() => {
+    let list = todos.filter(t => {
+      const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = filterCategory === "Hepsi" || t.category === filterCategory;
+      const matchesPriority = filterPriority === "Hepsi" || t.priority.toString() === filterPriority;
+
+      // AND: seçilen her kişi bu todo'nun assignees listesinde olmalı
+      const assigneeIds = t.assignees?.map((a: any) => a.id) || [];
+      const matchesAssignees = filterAssignees.length === 0
+        || filterAssignees.every((id: number) => assigneeIds.includes(id));
+
+      return matchesSearch && matchesCategory && matchesPriority && matchesAssignees;
+    });
+
+    // Sıralama
+    if (sortBy === "Ad") list = [...list].sort((a, b) => a.title.localeCompare(b.title, "tr"));
+    else if (sortBy === "Öncelik") list = [...list].sort((a, b) => b.priority - a.priority);
+    else if (sortBy === "Tarih") {
+      list = [...list].sort((a, b) => {
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      });
+    }
+    return list;
+  })();
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center font-black text-indigo-600 text-4xl animate-pulse tracking-tighter">
@@ -237,6 +285,9 @@ export default function HomePage() {
         activeProject={activeProject}
         setActiveProject={setActiveProject}
         username={currentUser?.username}
+        currentUser={currentUser}             // YENİ
+        onAvatarClick={() => setIsAvatarModalOpen(true)} // YENİ
+        onProjectsRefresh={fetchProjects}     // YENİ
         onNewProject={() => setIsNewProjectModalOpen(true)}
         onInviteOpen={(proj: any) => { setActiveProject(proj); setIsInviteModalOpen(true); }}
         onLogout={() => { localStorage.clear(); router.push("/login"); }}
@@ -272,6 +323,10 @@ export default function HomePage() {
             stats={{ total: todos.length, completed: todos.filter(t => t.isCompleted).length, pending: todos.filter(t => !t.isCompleted).length }}
             darkMode={darkMode} setDarkMode={setDarkMode}
             onLogout={() => { localStorage.clear(); router.push("/login"); }}
+            members={members}          // YENİ
+            currentUserId={currentUser?.id}  // YENİ
+            isLeader={isLeader}        // YENİ
+            onRemoveMember={handleRemoveMember} // YENİ
           />
 
           {isLeader ? (
@@ -295,6 +350,10 @@ export default function HomePage() {
             filterCategory={filterCategory} setFilterCategory={setFilterCategory}
             filterPriority={filterPriority} setFilterPriority={setFilterPriority}
             sortBy={sortBy} setSortBy={setSortBy}
+            categories={categories}            // YENİ
+            members={members}                  // YENİ
+            filterAssignees={filterAssignees}  // YENİ
+            setFilterAssignees={setFilterAssignees} // YENİ
           />
 
           <DragDropContext onDragEnd={handleOnDragEnd}>
@@ -386,6 +445,17 @@ export default function HomePage() {
           newTitle={newSubTaskTitle}
           setNewTitle={setNewSubTaskTitle}
           isLeader={isLeader}
+        />
+      )}
+
+      {/* YENİ: Avatar Modal */}
+      {isAvatarModalOpen && (
+        <AvatarModal
+          currentUser={currentUser}
+          onClose={() => setIsAvatarModalOpen(false)}
+          onUpdated={(avatarUrl) => {
+            setCurrentUser((prev: any) => ({ ...prev, avatarUrl }));
+          }}
         />
       )}
     </main>

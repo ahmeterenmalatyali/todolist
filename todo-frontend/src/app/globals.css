@@ -18,7 +18,6 @@
 }
 
 /* 3. KARANLIK MOD (HTML'de 'dark' SINIFI VARSA ÇALIŞIR) */
-/* Tailwind v4'te manuel dark mode tetikleyicisi */
 @custom-variant dark (&:where(.dark, .dark *));
 
 .dark {
@@ -31,7 +30,7 @@ select option {
   color: black;
 }
 .dark select option {
-  background-color: #0f172a; /* Slate 900 */
+  background-color: #0f172a;
   color: white;
 }
 
@@ -42,4 +41,28 @@ body {
   transition: all 0.5s ease;
   margin: 0;
   padding: 0;
+}
+
+/* 5. YENİ: Sidebar custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.3);
+  border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.6);
+}
+
+/* 6. YENİ: "Bugün" etiketi için yanıp sönen animasyon */
+@keyframes today-blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+  50%       { opacity: 0.75; box-shadow: 0 0 8px 3px rgba(245, 158, 11, 0.35); }
+}
+.today-blink {
+  animation: today-blink 1.4s ease-in-out infinite;
 }

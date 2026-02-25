@@ -1,4 +1,4 @@
-﻿namespace TodoApp.Backend.Entities
+namespace TodoApp.Backend.Entities
 {
     public class ProjectMember
     {
@@ -9,5 +9,8 @@
         public User User { get; set; } = null!;
 
         public ProjectRole Role { get; set; }
+
+        // YENİ: Davet durumu (eski kayıtlar Accepted sayılsın diye default = 1)
+        public InviteStatus Status { get; set; } = InviteStatus.Accepted;
     }
 }

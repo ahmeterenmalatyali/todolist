@@ -21,7 +21,15 @@ namespace TodoApp.Backend.Controllers
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
             var userId = int.Parse(userIdStr);
 
-            var isMember = await _context.ProjectMembers.AnyAsync(pm => pm.ProjectId == projectId && pm.UserId == userId);
+            // Proje sahibi veya kabul edilmiş üye ise izin ver
+            var project = await _context.Projects.FindAsync(projectId);
+            var isOwner = project?.OwnerId == userId;
+
+            var isMember = isOwner || await _context.ProjectMembers
+                .AnyAsync(pm => pm.ProjectId == projectId
+                    && pm.UserId == userId
+                    && pm.Status == InviteStatus.Accepted);
+
             if (!isMember) return Forbid();
 
             var todos = await _context.Todos
@@ -40,13 +48,13 @@ namespace TodoApp.Backend.Controllers
                     t.Order,
                     AssignedUserName = t.AssignedUser != null ? t.AssignedUser.Username : "Atanmamış",
                     t.AssignedUserId,
-                    Assignees = t.Assignees.Select(a => new { a.Id, a.Username }),
+                    Assignees = t.Assignees.Select(a => new { a.Id, a.Username, a.AvatarUrl }),
                     SubTasks = t.SubTasks.OrderBy(s => s.Id).Select(s => new {
                         s.Id,
                         s.Title,
                         s.IsCompleted,
                         s.AssignedUserId,
-                        AssignedUser = s.AssignedUser != null ? new { s.AssignedUser.Id, s.AssignedUser.Username } : null
+                        AssignedUser = s.AssignedUser != null ? new { s.AssignedUser.Id, s.AssignedUser.Username, s.AssignedUser.AvatarUrl } : null
                     }).ToList()
                 }).ToListAsync();
 
