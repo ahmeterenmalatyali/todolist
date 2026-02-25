@@ -21,7 +21,6 @@ namespace TodoApp.Backend.Controllers
             if (string.IsNullOrEmpty(userIdStr)) return Unauthorized();
             var userId = int.Parse(userIdStr);
 
-            // Proje sahibi veya kabul edilmiş üye ise izin ver
             var project = await _context.Projects.FindAsync(projectId);
             var isOwner = project?.OwnerId == userId;
 
@@ -32,31 +31,46 @@ namespace TodoApp.Backend.Controllers
 
             if (!isMember) return Forbid();
 
-            var todos = await _context.Todos
+            // EF Core + Npgsql, nested Select içindeki koşullu navigation property'leri
+            // ve AssignedUser null kontrolünü SQL'e çeviremez → 500 hatası.
+            // Çözüm: önce Include ile veriyi C#'a çek, sonra project et.
+            var todoEntities = await _context.Todos
                 .Where(t => t.ProjectId == projectId)
                 .Include(t => t.SubTasks)
+                    .ThenInclude(s => s.AssignedUser)
                 .Include(t => t.AssignedUser)
                 .Include(t => t.Assignees)
                 .OrderBy(t => t.Order)
-                .Select(t => new {
-                    t.Id,
-                    t.Title,
-                    t.IsCompleted,
-                    t.Priority,
-                    t.Category,
-                    t.DueDate,
-                    t.Order,
-                    AssignedUserName = t.AssignedUser != null ? t.AssignedUser.Username : "Atanmamış",
-                    t.AssignedUserId,
-                    Assignees = t.Assignees.Select(a => new { a.Id, a.Username, a.AvatarUrl }),
-                    SubTasks = t.SubTasks.OrderBy(s => s.Id).Select(s => new {
-                        s.Id,
-                        s.Title,
-                        s.IsCompleted,
-                        s.AssignedUserId,
-                        AssignedUser = s.AssignedUser != null ? new { s.AssignedUser.Id, s.AssignedUser.Username, s.AssignedUser.AvatarUrl } : null
-                    }).ToList()
-                }).ToListAsync();
+                .ToListAsync();
+
+            var todos = todoEntities.Select(t => new
+            {
+                t.Id,
+                t.Title,
+                t.IsCompleted,
+                t.Priority,
+                t.Category,
+                t.DueDate,
+                t.Order,
+                AssignedUserName = t.AssignedUser != null ? t.AssignedUser.Username : "Atanmamış",
+                t.AssignedUserId,
+                Assignees = t.Assignees.Select(a => new
+                {
+                    a.Id,
+                    a.Username,
+                    a.AvatarUrl
+                }).ToList(),
+                SubTasks = t.SubTasks.OrderBy(s => s.Id).Select(s => new
+                {
+                    s.Id,
+                    s.Title,
+                    s.IsCompleted,
+                    s.AssignedUserId,
+                    AssignedUser = s.AssignedUser != null
+                        ? (object)new { s.AssignedUser.Id, s.AssignedUser.Username, s.AssignedUser.AvatarUrl }
+                        : null
+                }).ToList()
+            }).ToList();
 
             return Ok(todos);
         }
@@ -86,7 +100,8 @@ namespace TodoApp.Backend.Controllers
             var todo = await _context.Todos.FindAsync(id);
             if (todo == null) return NotFound();
 
-            var member = await _context.ProjectMembers.FirstOrDefaultAsync(pm => pm.ProjectId == todo.ProjectId && pm.UserId == userId);
+            var member = await _context.ProjectMembers
+                .FirstOrDefaultAsync(pm => pm.ProjectId == todo.ProjectId && pm.UserId == userId);
             if (member?.Role != ProjectRole.Leader) return Forbid();
 
             _context.Todos.Remove(todo);
@@ -118,7 +133,8 @@ namespace TodoApp.Backend.Controllers
                 .FirstOrDefaultAsync(t => t.Id == id);
             if (todo == null) return NotFound();
 
-            var member = await _context.ProjectMembers.FirstOrDefaultAsync(pm => pm.ProjectId == todo.ProjectId && pm.UserId == userId);
+            var member = await _context.ProjectMembers
+                .FirstOrDefaultAsync(pm => pm.ProjectId == todo.ProjectId && pm.UserId == userId);
             bool canToggle = member?.Role == ProjectRole.Leader
                 || todo.Assignees.Any(a => a.Id == userId)
                 || todo.AssignedUserId == userId;
@@ -140,7 +156,8 @@ namespace TodoApp.Backend.Controllers
             if (firstTodo == null) return NotFound();
 
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-            var member = await _context.ProjectMembers.FirstOrDefaultAsync(pm => pm.ProjectId == firstTodo.ProjectId && pm.UserId == userId);
+            var member = await _context.ProjectMembers
+                .FirstOrDefaultAsync(pm => pm.ProjectId == firstTodo.ProjectId && pm.UserId == userId);
             if (member?.Role != ProjectRole.Leader) return Forbid();
 
             for (int i = 0; i < ids.Count; i++)

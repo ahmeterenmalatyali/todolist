@@ -23,7 +23,14 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Circular reference'ları yoksay
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    });
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddScoped<IEmailService, EmailService>();
 
@@ -62,9 +69,28 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
 
-// app.UseHttpsRedirection(); // KALDIRILDI: CORS preflight'ı engelliyordu
+    // Development'ta detaylı hata sayfası
+    app.UseDeveloperExceptionPage();
+}
+else
+{
+    // Production'da JSON hata response'u
+    app.UseExceptionHandler(errorApp =>
+    {
+        errorApp.Run(async context =>
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+            if (feature?.Error != null)
+            {
+                Console.Error.WriteLine($"[500 ERROR] {feature.Error}");
+                await context.Response.WriteAsJsonAsync(new { error = feature.Error.Message });
+            }
+        });
+    });
+}
 
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
