@@ -11,6 +11,7 @@ const PRIORITY_CONFIG: Record<number, { label: string; bg: string; text: string;
 
 export const TodoItem = ({ todo, index, role, onToggle, onDelete, onSelect, sortBy }: any) => {
   const isLeader = role === "Leader";
+  const isArchived = role === "Archived";
 
   const getDateStatus = (dateString: string) => {
     if (!dateString) return null;
@@ -78,7 +79,7 @@ export const TodoItem = ({ todo, index, role, onToggle, onDelete, onSelect, sort
   };
 
   return (
-    <Draggable draggableId={todo.id.toString()} index={index} isDragDisabled={sortBy !== "Manuel" || !isLeader}>
+    <Draggable draggableId={todo.id.toString()} index={index} isDragDisabled={sortBy !== "Manuel" || !isLeader || isArchived}>
       {(provided) => (
         <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className="group flex items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all duration-300 mb-3">
           <button onClick={() => onToggle(todo.id)} className={`text-2xl transition-colors ${todo.isCompleted ? "text-indigo-500" : "text-slate-300 hover:text-indigo-400"}`}>
