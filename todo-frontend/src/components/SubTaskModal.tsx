@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { FiX, FiPlus, FiUser, FiCheck, FiUsers, FiCheckCircle, FiCircle } from "react-icons/fi";
+import { FiX, FiPlus, FiCheck, FiUsers, FiCheckCircle, FiCircle, FiLock } from "react-icons/fi";
 
-export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, setNewTitle, isLeader, members, onUpdateAssignees }: any) => {
+export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, setNewTitle, isLeader, isArchived, members, onUpdateAssignees }: any) => {
   const [subTaskUserId, setSubTaskUserId] = useState("");
 
   const currentAssigneeIds = todo.assignees?.map((a: any) => a.id) || [];
 
-  // YENİ: avatar src helper
   const getAvatarSrc = (member: any) => {
     if (member.avatarUrl) return member.avatarUrl;
     return `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.username}`;
@@ -20,18 +19,28 @@ export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, s
 
         {/* Header */}
         <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-start bg-indigo-50/30 dark:bg-indigo-900/10">
-          <div>
-            <h2 className="text-2xl font-black text-slate-800 dark:text-white leading-tight">{todo.title}</h2>
+          <div className="flex-1 min-w-0 pr-4">
+            <h2 className="text-2xl font-black text-slate-800 dark:text-white leading-tight break-words">{todo.title}</h2>
             <p className="text-slate-400 text-xs font-bold mt-1 uppercase tracking-widest">GÖREV DETAYLARI VE ATAMALAR</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white dark:hover:bg-slate-800 rounded-full transition-all text-slate-400">
+          <button onClick={onClose} className="flex-shrink-0 p-2 hover:bg-white dark:hover:bg-slate-800 rounded-full transition-all text-slate-400">
             <FiX size={24} />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-8 space-y-8">
 
-          {/* SEKTÖR 1: ANA GÖREV SORUMLULARI */}
+          {/* Arşiv uyarısı */}
+          {isArchived && (
+            <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-2xl">
+              <FiLock className="text-amber-500 flex-shrink-0" size={18} />
+              <p className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                Arşivlenmiş projede düzenleme yapılamaz.
+              </p>
+            </div>
+          )}
+
+          {/* ANA GÖREV SORUMLULARI */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black text-sm uppercase tracking-tighter">
               <FiUsers /> ANA GÖREV SORUMLULARI
@@ -42,14 +51,17 @@ export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, s
                 return (
                   <button
                     key={member.id}
-                    onClick={() => onUpdateAssignees(todo.id, member.id)}
+                    onClick={() => {
+                      // Sadece Leader atama yapabilir, arşivde yapılamaz
+                      if (!isLeader || isArchived) return;
+                      onUpdateAssignees(todo.id, member.id);
+                    }}
                     className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all border ${
                       isAssigned
                         ? "bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20"
                         : "bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-100 dark:border-slate-700 hover:border-indigo-300"
-                    }`}
+                    } ${(!isLeader || isArchived) ? "cursor-default opacity-80" : "cursor-pointer"}`}
                   >
-                    {/* YENİ: initials yerine avatar */}
                     <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
                       <img src={getAvatarSrc(member)} alt={member.username} className="w-full h-full object-cover" />
                     </div>
@@ -58,18 +70,24 @@ export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, s
                   </button>
                 );
               })}
+              {members.length === 0 && (
+                <p className="text-xs text-slate-400 font-medium">Başka üye yok.</p>
+              )}
             </div>
+            {!isLeader && !isArchived && (
+              <p className="text-[11px] text-slate-400 italic">Sadece Proje Lideri atama yapabilir.</p>
+            )}
           </div>
 
           <hr className="border-slate-100 dark:border-slate-800" />
 
-          {/* SEKTÖR 2: ALT GÖREVLER */}
+          {/* ALT GÖREVLER */}
           <div className="space-y-6">
             <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black text-sm uppercase tracking-tighter">
               <FiPlus /> ALT MODÜLLER VE ATAMALAR
             </div>
 
-            {isLeader && (
+            {isLeader && !isArchived && (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -108,8 +126,14 @@ export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, s
                 <div key={sub.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl group transition-all">
                   <div className="flex items-center gap-4">
                     <button
-                      onClick={() => onToggleSub(sub.id)}
-                      className={`text-xl transition-colors ${sub.isCompleted ? "text-indigo-500" : "text-slate-300 hover:text-indigo-400"}`}
+                      onClick={() => { if (!isArchived) onToggleSub(sub.id); }}
+                      className={`text-xl transition-colors ${
+                        isArchived
+                          ? "text-slate-200 dark:text-slate-700 cursor-not-allowed"
+                          : sub.isCompleted
+                            ? "text-indigo-500"
+                            : "text-slate-300 hover:text-indigo-400"
+                      }`}
                     >
                       {sub.isCompleted ? <FiCheckCircle /> : <FiCircle />}
                     </button>
@@ -120,7 +144,6 @@ export const SubTaskModal = ({ todo, onClose, onToggleSub, onAddSub, newTitle, s
 
                   {sub.assignedUser && (
                     <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-100 dark:border-slate-700">
-                      {/* YENİ: FiUser ikonu yerine avatar */}
                       <div className="w-5 h-5 rounded-full overflow-hidden">
                         <img
                           src={sub.assignedUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${sub.assignedUser.username}`}
