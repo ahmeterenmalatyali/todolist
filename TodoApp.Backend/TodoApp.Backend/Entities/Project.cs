@@ -16,5 +16,6 @@ namespace TodoApp.Backend.Entities
         // İlişkiler
         public List<ProjectMember> ProjectMembers { get; set; } = new();
         public List<Todo> Todos { get; set; } = new();
+        public bool IsArchived { get; set; } = false;
     }
 }

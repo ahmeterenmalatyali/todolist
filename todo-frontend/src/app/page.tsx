@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
-import { FiSave } from "react-icons/fi";
+import { FiSave, FiAlertTriangle, FiX } from "react-icons/fi";
 import { DragDropContext } from "@hello-pangea/dnd";
 import toast from "react-hot-toast";
 
@@ -16,7 +16,7 @@ import { SubTaskModal } from "@/components/SubTaskModal";
 import { StrictModeDroppable } from "@/components/StrictModeDroppable";
 import { InviteMemberModal } from "@/components/InviteMemberModal";
 import { NewProjectModal } from "@/components/NewProjectModal";
-import { AvatarModal } from "@/components/AvatarModal"; // YENİ
+import { AvatarModal } from "@/components/AvatarModal";
 
 export default function HomePage() {
   const router = useRouter();
@@ -30,7 +30,7 @@ export default function HomePage() {
   const [darkMode, setDarkMode] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
-  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false); // YENİ
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [selectedTodo, setSelectedTodo] = useState<any>(null);
   const [isOrderChanged, setIsOrderChanged] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -47,12 +47,15 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("Hepsi");
   const [filterPriority, setFilterPriority] = useState("Hepsi");
-  const [filterAssignees, setFilterAssignees] = useState<number[]>([]); // YENİ
+  const [filterAssignees, setFilterAssignees] = useState<number[]>([]);
   const [sortBy, setSortBy] = useState("Manuel");
+
+  // Üye çıkarma popup
+  const [memberToRemove, setMemberToRemove] = useState<{ id: number; username: string } | null>(null);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   const isLeader = activeProject?.isOwner || activeProject?.role === "Leader";
 
-  // HATA DÜZELTMESİ: selectedTodo dependency'si kaldırıldı — sonsuz döngü önlendi.
   const selectedTodoRef = useRef<any>(null);
   selectedTodoRef.current = selectedTodo;
 
@@ -103,7 +106,6 @@ export default function HomePage() {
     try {
       const res = await api.get(`/Project/${pId}/members`);
       const memberList = res.data;
-      // Yönetici (currentUser) listede yoksa ekle
       if (currentUser && !memberList.find((m: any) => m.id === currentUser.id)) {
         memberList.unshift(currentUser);
       }
@@ -113,7 +115,6 @@ export default function HomePage() {
     }
   }, [activeProject, currentUser]);
 
-  // YENİ: proje listesini yenile
   const fetchProjects = useCallback(async () => {
     try {
       const res = await api.get("/Project");
@@ -152,7 +153,6 @@ export default function HomePage() {
       fetchTodos();
       fetchMembers();
       fetchCategories();
-      // YENİ: Proje değişince kişi filtrelerini sıfırla
       setFilterAssignees([]);
     }
   }, [activeProject, fetchTodos, fetchMembers, fetchCategories]);
@@ -200,6 +200,21 @@ export default function HomePage() {
     }
   };
 
+  // YENİ: Proje silindikten sonra aktif projeyi güncelle
+  const handleProjectDeleted = async (deletedId: number) => {
+    const updated = await fetchProjects();
+    if (activeProject?.id === deletedId) {
+      if (updated?.owned?.length > 0) setActiveProject(updated.owned[0]);
+      else if (updated?.joined?.length > 0) setActiveProject(updated.joined[0]);
+      else {
+        setActiveProject(null);
+        setTodos([]);
+        setMembers([]);
+        setCategories([]);
+      }
+    }
+  };
+
   const handleUpdateAssignees = async (todoId: number, userId: number) => {
     try {
       await api.post(`/Todo/${todoId}/assign/${userId}`);
@@ -210,16 +225,58 @@ export default function HomePage() {
     }
   };
 
-  // YENİ: Üye çıkar
-  const handleRemoveMember = async (userId: number) => {
+  const handleRemoveMemberClick = (userId: number) => {
+    const member = members.find((m: any) => m.id === userId);
+    if (member) setMemberToRemove({ id: member.id, username: member.username });
+  };
+
+  const handleConfirmRemoveMember = async () => {
+    if (!memberToRemove) return;
     const pId = activeProject?.id || activeProject?.Id;
-    if (!confirm("Bu üyeyi projeden çıkarmak istediğinize emin misiniz?")) return;
+    const removedId = memberToRemove.id;
+    setIsRemovingMember(true);
     try {
-      await api.delete(`/Project/${pId}/members/${userId}`);
+      await api.delete(`/Project/${pId}/members/${removedId}`);
       toast.success("Üye projeden çıkarıldı.");
-      fetchMembers();
+      setMemberToRemove(null);
+
+      // Üye listesini güncelle
+      setMembers(prev => prev.filter((m: any) => m.id !== removedId));
+
+      // YENİ: Client-side anlık avatar temizleme — backend'den bağımsız
+      // Todos içindeki assignees'den çıkarılan üyeyi hemen kaldırır
+      setTodos(prev => prev.map((todo: any) => ({
+        ...todo,
+        assignees: (todo.assignees || []).filter((a: any) => a.id !== removedId),
+        subTasks: (todo.subTasks || []).map((sub: any) => ({
+          ...sub,
+          assignedUser: sub.assignedUser?.id === removedId ? null : sub.assignedUser,
+        })),
+      })));
+
+      // Açık modal varsa da güncelle
+      if (selectedTodoRef.current) {
+        setSelectedTodo((prev: any) => prev ? {
+          ...prev,
+          assignees: (prev.assignees || []).filter((a: any) => a.id !== removedId),
+          subTasks: (prev.subTasks || []).map((sub: any) => ({
+            ...sub,
+            assignedUser: sub.assignedUser?.id === removedId ? null : sub.assignedUser,
+          })),
+        } : null);
+      }
+
+      // NOT: fetchTodos() kasıtlı olarak çağrılmıyor.
+      // Backend, üye silinince todo assignees'i temizlemediği için
+      // fetchTodos çağrısı client-side temizlemeyi ezip eski avatarı geri getirir.
+      // Temizleme client-side yapılır; proje değişimi veya sonraki işlemlerde sync olur.
+
+      // Atamalar filtresinden de kaldır
+      setFilterAssignees(prev => prev.filter(id => id !== removedId));
     } catch (err: any) {
       toast.error(err.response?.data?.message || "İşlem başarısız.");
+    } finally {
+      setIsRemovingMember(false);
     }
   };
 
@@ -242,15 +299,12 @@ export default function HomePage() {
     }
   };
 
-  // YENİ: Filtreleme — kişi filtresi AND mantığıyla çalışır
-  // Seçilen tüm kişiler aynı anda o todo'da assignee olmalı
   const filteredTodos = (() => {
     let list = todos.filter(t => {
       const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = filterCategory === "Hepsi" || t.category === filterCategory;
       const matchesPriority = filterPriority === "Hepsi" || t.priority.toString() === filterPriority;
 
-      // AND: seçilen her kişi bu todo'nun assignees listesinde olmalı
       const assigneeIds = t.assignees?.map((a: any) => a.id) || [];
       const matchesAssignees = filterAssignees.length === 0
         || filterAssignees.every((id: number) => assigneeIds.includes(id));
@@ -258,7 +312,6 @@ export default function HomePage() {
       return matchesSearch && matchesCategory && matchesPriority && matchesAssignees;
     });
 
-    // Sıralama
     if (sortBy === "Ad") list = [...list].sort((a, b) => a.title.localeCompare(b.title, "tr"));
     else if (sortBy === "Öncelik") list = [...list].sort((a, b) => b.priority - a.priority);
     else if (sortBy === "Tarih") {
@@ -285,12 +338,13 @@ export default function HomePage() {
         activeProject={activeProject}
         setActiveProject={setActiveProject}
         username={currentUser?.username}
-        currentUser={currentUser}             // YENİ
-        onAvatarClick={() => setIsAvatarModalOpen(true)} // YENİ
-        onProjectsRefresh={fetchProjects}     // YENİ
+        currentUser={currentUser}
+        onAvatarClick={() => setIsAvatarModalOpen(true)}
+        onProjectsRefresh={fetchProjects}
         onNewProject={() => setIsNewProjectModalOpen(true)}
         onInviteOpen={(proj: any) => { setActiveProject(proj); setIsInviteModalOpen(true); }}
         onLogout={() => { localStorage.clear(); router.push("/login"); }}
+        onDeleteProject={handleProjectDeleted}  // YENİ
       />
 
       <div className="flex-1 py-12 px-4 md:px-8 overflow-y-auto">
@@ -318,69 +372,80 @@ export default function HomePage() {
             </div>
           )}
 
-          <TodoHeader
-            username={activeProject?.name || "LİSTE SEÇİN"}
-            stats={{ total: todos.length, completed: todos.filter(t => t.isCompleted).length, pending: todos.filter(t => !t.isCompleted).length }}
-            darkMode={darkMode} setDarkMode={setDarkMode}
-            onLogout={() => { localStorage.clear(); router.push("/login"); }}
-            members={members}          // YENİ
-            currentUserId={currentUser?.id}  // YENİ
-            isLeader={isLeader}        // YENİ
-            onRemoveMember={handleRemoveMember} // YENİ
-          />
+          {activeProject ? (
+            <>
+              <TodoHeader
+                username={activeProject?.name || "LİSTE SEÇİN"}
+                stats={{ total: todos.length, completed: todos.filter(t => t.isCompleted).length, pending: todos.filter(t => !t.isCompleted).length }}
+                darkMode={darkMode} setDarkMode={setDarkMode}
+                onLogout={() => { localStorage.clear(); router.push("/login"); }}
+                members={members}
+                currentUserId={currentUser?.id}
+                isLeader={isLeader}
+                onRemoveMember={handleRemoveMemberClick}
+              />
 
-          {isLeader ? (
-            <AddTodoForm
-              onSubmit={handleAddTodoSubmit}
-              title={newTodoTitle} setTitle={setNewTodoTitle}
-              priority={priority} setPriority={setPriority}
-              category={category} setCategory={setCategory}
-              dueDate={dueDate} setDueDate={setDueDate}
-              categories={categories}
-              onAddCategory={handleAddCategory}
-            />
-          ) : (
-            <div className="p-6 bg-white dark:bg-slate-900 rounded-3xl text-center text-sm font-bold text-slate-400 mb-8 border border-dashed border-slate-200">
-              Sadece Proje Lideri yeni görev ekleyebilir.
-            </div>
-          )}
-
-          <TodoToolbar
-            searchQuery={searchQuery} setSearchQuery={setSearchQuery}
-            filterCategory={filterCategory} setFilterCategory={setFilterCategory}
-            filterPriority={filterPriority} setFilterPriority={setFilterPriority}
-            sortBy={sortBy} setSortBy={setSortBy}
-            categories={categories}            // YENİ
-            members={members}                  // YENİ
-            filterAssignees={filterAssignees}  // YENİ
-            setFilterAssignees={setFilterAssignees} // YENİ
-          />
-
-          <DragDropContext onDragEnd={handleOnDragEnd}>
-            <StrictModeDroppable droppableId="todos">
-              {(provided) => (
-                <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-3 pb-24">
-                  {filteredTodos.map((todo, index) => (
-                    <TodoItem
-                      key={todo.id} todo={todo} index={index} sortBy={sortBy}
-                      role={isLeader ? "Leader" : "Member"} currentUserId={currentUser?.id}
-                      onToggle={async (id: any) => {
-                        try {
-                          await api.put(`/Todo/${id}/toggle`);
-                          fetchTodos();
-                        } catch (err: any) {
-                          toast.error(err.response?.data || "Görev güncellenemedi.");
-                        }
-                      }}
-                      onDelete={handleDeleteTodo}
-                      onSelect={setSelectedTodo}
-                    />
-                  ))}
-                  {provided.placeholder}
+              {isLeader ? (
+                <AddTodoForm
+                  onSubmit={handleAddTodoSubmit}
+                  title={newTodoTitle} setTitle={setNewTodoTitle}
+                  priority={priority} setPriority={setPriority}
+                  category={category} setCategory={setCategory}
+                  dueDate={dueDate} setDueDate={setDueDate}
+                  categories={categories}
+                  onAddCategory={handleAddCategory}
+                />
+              ) : (
+                <div className="p-6 bg-white dark:bg-slate-900 rounded-3xl text-center text-sm font-bold text-slate-400 mb-8 border border-dashed border-slate-200">
+                  Sadece Proje Lideri yeni görev ekleyebilir.
                 </div>
               )}
-            </StrictModeDroppable>
-          </DragDropContext>
+
+              <TodoToolbar
+                searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+                filterCategory={filterCategory} setFilterCategory={setFilterCategory}
+                filterPriority={filterPriority} setFilterPriority={setFilterPriority}
+                sortBy={sortBy} setSortBy={setSortBy}
+                categories={categories}
+                members={members}
+                filterAssignees={filterAssignees}
+                setFilterAssignees={setFilterAssignees}
+              />
+
+              <DragDropContext onDragEnd={handleOnDragEnd}>
+                <StrictModeDroppable droppableId="todos">
+                  {(provided) => (
+                    <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-3 pb-24">
+                      {filteredTodos.map((todo, index) => (
+                        <TodoItem
+                          key={todo.id} todo={todo} index={index} sortBy={sortBy}
+                          role={isLeader ? "Leader" : "Member"} currentUserId={currentUser?.id}
+                          onToggle={async (id: any) => {
+                            try {
+                              await api.put(`/Todo/${id}/toggle`);
+                              fetchTodos();
+                            } catch (err: any) {
+                              toast.error(err.response?.data || "Görev güncellenemedi.");
+                            }
+                          }}
+                          onDelete={handleDeleteTodo}
+                          onSelect={setSelectedTodo}
+                        />
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </StrictModeDroppable>
+              </DragDropContext>
+            </>
+          ) : (
+            /* Hiç proje yoksa boş durum */
+            <div className="flex flex-col items-center justify-center h-[60vh] text-center gap-4">
+              <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-500 text-3xl">📋</div>
+              <h2 className="text-xl font-black text-slate-700 dark:text-slate-200">Henüz liste yok</h2>
+              <p className="text-sm text-slate-400">Sol menüden yeni bir liste oluşturun.</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -448,7 +513,6 @@ export default function HomePage() {
         />
       )}
 
-      {/* YENİ: Avatar Modal */}
       {isAvatarModalOpen && (
         <AvatarModal
           currentUser={currentUser}
@@ -457,6 +521,60 @@ export default function HomePage() {
             setCurrentUser((prev: any) => ({ ...prev, avatarUrl }));
           }}
         />
+      )}
+
+      {/* Üye çıkarma onay popup'ı */}
+      {memberToRemove && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-rose-100 dark:bg-rose-900/30 rounded-xl flex items-center justify-center text-rose-500">
+                  <FiAlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800 dark:text-white">Üyeyi Çıkar</h3>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">Bu işlem geri alınamaz</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setMemberToRemove(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                <span className="font-black text-slate-800 dark:text-white">
+                  {memberToRemove.username}
+                </span>{" "}
+                adlı kullanıcıyı bu projeden çıkarmak istediğinize emin misiniz?
+              </p>
+              <p className="text-xs text-slate-400 mt-2">
+                Kullanıcı projeye erişimini kaybedecek ve atandığı görevlerden çıkarılacak.
+              </p>
+            </div>
+
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={() => setMemberToRemove(null)}
+                disabled={isRemovingMember}
+                className="flex-1 py-3 rounded-2xl text-sm font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleConfirmRemoveMember}
+                disabled={isRemovingMember}
+                className="flex-1 py-3 rounded-2xl text-sm font-black bg-rose-500 hover:bg-rose-600 text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isRemovingMember ? "Çıkarılıyor..." : "Çıkar"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

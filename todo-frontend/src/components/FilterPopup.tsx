@@ -52,6 +52,9 @@ export const FilterPopup = ({
     return `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.username}`;
   };
 
+  // DEĞİŞİKLİK: Kime atanmış listesinde Leader rolündekiler gösterilmez
+  const assignableMembers = members?.filter((m: any) => m.role !== "Leader") ?? [];
+
   return (
     <div ref={ref} className="relative">
       {/* Filtrele butonu */}
@@ -140,8 +143,8 @@ export const FilterPopup = ({
               </div>
             </div>
 
-            {/* Kime Atanmış (AND mantığı) */}
-            {members?.length > 0 && (
+            {/* DEĞİŞİKLİK: Kime Atanmış — Leader rolündekiler hariç */}
+            {assignableMembers.length > 0 && (
               <div>
                 <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Kime Atanmış</p>
                 {filterAssignees.length > 1 && (
@@ -150,7 +153,7 @@ export const FilterPopup = ({
                   </p>
                 )}
                 <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                  {members.map((m: any) => {
+                  {assignableMembers.map((m: any) => {
                     const selected = filterAssignees.includes(m.id);
                     return (
                       <button

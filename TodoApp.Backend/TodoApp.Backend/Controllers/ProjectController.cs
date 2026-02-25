@@ -26,17 +26,22 @@ namespace TodoApp.Backend.Controllers
                 .Select(p => new { p.Id, p.Name, IsOwner = true, Role = "Leader" })
                 .ToListAsync();
 
-            // YENİ: Sadece kabul edilmiş (Accepted) üyelikleri getir
-            var joined = await _context.ProjectMembers
+            // EF Core + Npgsql, pm.Role.ToString() ifadesini SQL'e çeviremez.
+            // Bu yüzden önce veriyi C#'a çekip, sonra project ediyoruz.
+            var joinedRaw = await _context.ProjectMembers
                 .Where(pm => pm.UserId == userId
                     && pm.Project.OwnerId != userId
                     && pm.Status == InviteStatus.Accepted)
-                .Select(pm => new {
-                    Id = pm.Project.Id,
-                    Name = pm.Project.Name,
-                    IsOwner = false,
-                    Role = pm.Role.ToString()
-                }).ToListAsync();
+                .Include(pm => pm.Project)
+                .ToListAsync();
+
+            var joined = joinedRaw.Select(pm => new
+            {
+                Id = pm.Project.Id,
+                Name = pm.Project.Name,
+                IsOwner = false,
+                Role = pm.Role.ToString()
+            }).ToList();
 
             return Ok(new { owned, joined });
         }
@@ -55,14 +60,13 @@ namespace TodoApp.Backend.Controllers
                 UserId = userId,
                 ProjectId = project.Id,
                 Role = ProjectRole.Leader,
-                Status = InviteStatus.Accepted // Proje sahibi direkt kabul edilmiş sayılır
+                Status = InviteStatus.Accepted
             });
             await _context.SaveChangesAsync();
 
             return Ok(new { project.Id, project.Name, IsOwner = true, Role = "Leader" });
         }
 
-        // YENİ: Davet gönder (artık Pending olarak kaydedilir, direkt eklenmez)
         [HttpPost("{projectId}/invite")]
         public async Task<IActionResult> InviteUser(int projectId, [FromBody] InviteRequest dto)
         {
@@ -84,7 +88,6 @@ namespace TodoApp.Backend.Controllers
                     return BadRequest(new { message = "Kullanıcı zaten bu projenin üyesi." });
                 if (existing.Status == InviteStatus.Pending)
                     return BadRequest(new { message = "Bu kullanıcıya zaten davet gönderildi." });
-                // Daha önce reddetmişse tekrar davet gönder
                 existing.Status = InviteStatus.Pending;
                 await _context.SaveChangesAsync();
                 return Ok(new { message = "Davet yeniden gönderildi." });
@@ -95,30 +98,35 @@ namespace TodoApp.Backend.Controllers
                 ProjectId = projectId,
                 UserId = user.Id,
                 Role = ProjectRole.Member,
-                Status = InviteStatus.Pending // Bekliyor
+                Status = InviteStatus.Pending
             });
             await _context.SaveChangesAsync();
             return Ok(new { message = "Davet gönderildi." });
         }
 
-        // YENİ: Gelen davetleri listele
         [HttpGet("invitations")]
         public async Task<IActionResult> GetPendingInvitations()
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-            var invitations = await _context.ProjectMembers
+            // EF Core + Npgsql, navigation property üzerindeki koşullu ifadeleri SQL'e çeviremez.
+            // Önce veriyi C#'a çekip sonra project ediyoruz.
+            var rawData = await _context.ProjectMembers
                 .Where(pm => pm.UserId == userId && pm.Status == InviteStatus.Pending)
-                .Select(pm => new {
-                    ProjectId = pm.Project.Id,
-                    ProjectName = pm.Project.Name,
-                    InvitedBy = pm.Project.Owner != null ? pm.Project.Owner.Username : "Bilinmiyor"
-                }).ToListAsync();
+                .Include(pm => pm.Project)
+                    .ThenInclude(p => p.Owner)
+                .ToListAsync();
+
+            var invitations = rawData.Select(pm => new
+            {
+                ProjectId = pm.Project.Id,
+                ProjectName = pm.Project.Name,
+                InvitedBy = pm.Project.Owner != null ? pm.Project.Owner.Username : "Bilinmiyor"
+            }).ToList();
 
             return Ok(invitations);
         }
 
-        // YENİ: Daveti kabul et
         [HttpPost("{projectId}/invitations/accept")]
         public async Task<IActionResult> AcceptInvitation(int projectId)
         {
@@ -137,7 +145,6 @@ namespace TodoApp.Backend.Controllers
             return Ok(new { message = "Daveti kabul ettiniz.", projectName = project?.Name });
         }
 
-        // YENİ: Daveti reddet
         [HttpPost("{projectId}/invitations/reject")]
         public async Task<IActionResult> RejectInvitation(int projectId)
         {
@@ -154,13 +161,25 @@ namespace TodoApp.Backend.Controllers
             return Ok(new { message = "Davet reddedildi." });
         }
 
-        // GÜNCELLENDI: Sadece Accepted üyeleri göster + YENİ: AvatarUrl dahil
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteProject(int id)
+        {
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+            var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id);
+            if (project == null) return NotFound("Proje bulunamadı.");
+            if (project.OwnerId != userId) return Forbid();
+
+            _context.Projects.Remove(project);
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
         [HttpGet("{projectId}/members")]
         public async Task<IActionResult> GetProjectMembers(int projectId)
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-            // Proje sahibi veya kabul edilmiş üye ise izin ver
             var project = await _context.Projects.FindAsync(projectId);
             var isOwner = project?.OwnerId == userId;
 
@@ -171,20 +190,24 @@ namespace TodoApp.Backend.Controllers
 
             if (!isMember) return Forbid();
 
-            var members = await _context.ProjectMembers
+            // EF Core + Npgsql, pm.Role.ToString() ifadesini SQL'e çeviremez.
+            var rawMembers = await _context.ProjectMembers
                 .Where(pm => pm.ProjectId == projectId && pm.Status == InviteStatus.Accepted)
-                .Select(pm => new {
-                    pm.User.Id,
-                    pm.User.Username,
-                    pm.User.Email,
-                    pm.User.AvatarUrl,
-                    Role = pm.Role.ToString()
-                }).ToListAsync();
+                .Include(pm => pm.User)
+                .ToListAsync();
+
+            var members = rawMembers.Select(pm => new
+            {
+                pm.User.Id,
+                pm.User.Username,
+                pm.User.Email,
+                pm.User.AvatarUrl,
+                Role = pm.Role.ToString()
+            }).ToList();
 
             return Ok(members);
         }
 
-        // YENİ: Üyeyi projeden çıkar (sadece leader yapabilir)
         [HttpDelete("{projectId}/members/{targetUserId}")]
         public async Task<IActionResult> RemoveMember(int projectId, int targetUserId)
         {
