@@ -1,51 +1,55 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ==============================
+# BACKEND (.NET)
+# ==============================
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Derleme çıktıları
+TodoApp.Backend/**/bin/
+TodoApp.Backend/**/obj/
 
-# Visual Studio geçici dosyaları
-.vs/
-*.vsidx
+# Gizli ayarlar (ŞİFRE / API KEY içerir!)
+TodoApp.Backend/**/appsettings.json
+TodoApp.Backend/**/appsettings.*.json
 
-# Build çıktıları
-**/obj/
-**/bin/
-[Bb]in/
-[Obj]obj/
-*.user
-# testing
-/coverage
+# Visual Studio dosyaları
+TodoApp.Backend/**/.vs/
+TodoApp.Backend/**/*.user
+TodoApp.Backend/**/*.suo
+TodoApp.Backend/**/*.userosscache
+TodoApp.Backend/**/*.sln.docstates
 
-# next.js
-/.next/
-/out/
+# ==============================
+# FRONTEND (Next.js)
+# ==============================
 
-# production
-/build
+# Bağımlılıklar
+todo-frontend/node_modules/
 
-# misc
+# Next.js build çıktısı
+todo-frontend/.next/
+todo-frontend/out/
+
+# Ortam değişkenleri (API KEY içerebilir!)
+todo-frontend/.env
+todo-frontend/.env.local
+todo-frontend/.env.development.local
+todo-frontend/.env.test.local
+todo-frontend/.env.production.local
+
+# Cache
+todo-frontend/.eslintcache
+
+# ==============================
+# GENEL
+# ==============================
+
+# OS dosyaları
 .DS_Store
-*.pem
+Thumbs.db
 
-# debug
+# IDE
+.vscode/
+.idea/
+
+# Log dosyaları
+*.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
